@@ -29,6 +29,9 @@ static void subscribe_device_topics() {
     snprintf(t, sizeof(t), "apigame/device/%s/result", _dev_id);
     mqttClient.subscribe(t);
     Serial.printf("  Sub: %s\n", t);
+
+    mqttClient.subscribe("apigame/leaderboard");
+    Serial.println("  Sub: apigame/leaderboard");
 }
 
 void mqtt_init(const char* device_id) {

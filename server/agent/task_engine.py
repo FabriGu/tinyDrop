@@ -202,13 +202,15 @@ class SessionState:
         elif verb == "DELETE":
             self.event_count = max(0, self.event_count - 1)
 
-        # Scoring
-        if api_error:
-            points = POINTS_API_ERROR
-            correct = False
-        elif verb == expected:
+        # Scoring — check verb correctness first so infrastructure errors
+        # (expired token, network) don't penalise a correct choice.
+        # API errors only penalise when the verb was also wrong.
+        if verb == expected:
             points = POINTS_CORRECT
             correct = True
+        elif api_error:
+            points = POINTS_API_ERROR
+            correct = False
         else:
             points = POINTS_WRONG
             correct = False
