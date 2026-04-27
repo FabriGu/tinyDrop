@@ -1,0 +1,15 @@
+[Unit]
+Description=APIgame MQTT-Calendar Agent
+After=network.target mosquitto.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/apigame/agent
+EnvironmentFile=/opt/apigame/config/.env
+ExecStart=/opt/apigame/venv/bin/python /opt/apigame/agent/agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

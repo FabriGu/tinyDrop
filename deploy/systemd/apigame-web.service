@@ -1,0 +1,15 @@
+[Unit]
+Description=APIgame Web Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/apigame/web
+EnvironmentFile=/opt/apigame/config/.env
+ExecStart=/opt/apigame/venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8010
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

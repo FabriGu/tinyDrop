@@ -1,0 +1,49 @@
+/* APIgame big-screen — minimal placeholder styles */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a0a0a;
+  color: #e0e0e0;
+  font-family: "Courier New", Courier, monospace;
+  padding: 2rem;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #00ff88;
+}
+
+#status {
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  padding: 0.4rem 0.8rem;
+  display: inline-block;
+  border-radius: 4px;
+  background: #1a1a1a;
+}
+
+#status.connected {
+  color: #00ff88;
+}
+
+#status.disconnected {
+  color: #ff4444;
+}
+
+#output {
+  background: #111;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow: auto;
+  max-height: 80vh;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
