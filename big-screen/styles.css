@@ -1,49 +1,411 @@
-/* APIgame big-screen — minimal placeholder styles */
+/* APIgame big-screen — arcade aesthetic for 1080p landscape */
 
+/* ── Reset ─────────────────────────────────────────────────── */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  background: #0a0a0a;
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0d0d1a;
   color: #e0e0e0;
   font-family: "Courier New", Courier, monospace;
-  padding: 2rem;
 }
 
-h1 {
-  font-size: 2rem;
-  margin-bottom: 1rem;
+/* ── Connection status badge ───────────────────────────────── */
+#conn-status {
+  position: fixed;
+  top: 10px;
+  right: 16px;
+  font-size: 0.75rem;
+  padding: 4px 12px;
+  border-radius: 12px;
+  z-index: 100;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#conn-status.connected {
+  background: rgba(0, 255, 136, 0.15);
   color: #00ff88;
 }
 
-#status {
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-  padding: 0.4rem 0.8rem;
-  display: inline-block;
-  border-radius: 4px;
-  background: #1a1a1a;
-}
-
-#status.connected {
-  color: #00ff88;
-}
-
-#status.disconnected {
+#conn-status.disconnected {
+  background: rgba(255, 68, 68, 0.15);
   color: #ff4444;
+  animation: pulse-red 1.5s ease-in-out infinite;
 }
 
-#output {
-  background: #111;
-  padding: 1rem;
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Player bar ────────────────────────────────────────────── */
+#player-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 32px;
+  background: #16162a;
+  border-bottom: 2px solid #2a2a4a;
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+#player-bar.hidden {
+  display: none;
+}
+
+#player-name {
+  color: #00ff88;
+  min-width: 120px;
+}
+
+#player-score {
+  color: #ffdd57;
+  font-size: 2.4rem;
+}
+
+#player-timer {
+  color: #ff6b6b;
+  min-width: 120px;
+  text-align: right;
+}
+
+#player-timer.urgent {
+  animation: blink-timer 0.5s step-end infinite;
+}
+
+@keyframes blink-timer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ── Main area: calendar + log ─────────────────────────────── */
+#main-area {
+  display: flex;
+  height: calc(100vh - 60px - 70px);
+  /* 60px player bar, 70px leaderboard */
+}
+
+/* ── Calendar panel (left, ~65%) ───────────────────────────── */
+#calendar-panel {
+  flex: 0 0 65%;
+  padding: 20px 28px;
+  overflow-y: auto;
+  border-right: 2px solid #2a2a4a;
+}
+
+#calendar-panel h2 {
+  font-size: 1.1rem;
+  color: #6a6a9a;
+  letter-spacing: 0.15em;
+  margin-bottom: 8px;
+}
+
+#calendar-date {
+  font-size: 0.85rem;
+  color: #5a5a8a;
+  margin-bottom: 16px;
+}
+
+#calendar-events {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty-state {
+  color: #4a4a6a;
+  font-size: 1.4rem;
+  text-align: center;
+  padding: 60px 0;
+}
+
+/* Calendar event cards */
+.cal-event {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #16162a;
+  border-left: 4px solid #4a90d9;
   border-radius: 6px;
-  overflow: auto;
-  max-height: 80vh;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  padding: 16px 24px;
+  transition: all 0.3s ease;
+  animation: slide-in 0.3s ease;
+}
+
+.cal-event.removing {
+  animation: slide-out 0.3s ease forwards;
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(20px); }
+}
+
+.cal-time {
+  font-size: 1.6rem;
+  color: #4a90d9;
+  white-space: nowrap;
+  min-width: 110px;
+}
+
+.cal-title {
+  font-size: 1.8rem;
+  color: #e8e8ff;
+  font-weight: bold;
+}
+
+/* ── Log panel (right, ~35%) ───────────────────────────────── */
+#log-panel {
+  flex: 0 0 35%;
+  padding: 20px 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#log-panel h2 {
+  font-size: 1.1rem;
+  color: #6a6a9a;
+  letter-spacing: 0.15em;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+#log-entries {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Individual log entry */
+.log-entry {
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: #12122a;
+  font-size: 1.3rem;
+  line-height: 1.5;
+  animation: fade-in 0.3s ease;
+  flex-shrink: 0;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.log-method {
+  font-weight: bold;
+  display: inline;
+}
+
+.log-path {
+  color: #8888bb;
+}
+
+.log-status {
+  float: right;
+  font-weight: bold;
+}
+
+/* HTTP method colors */
+.method-GET    .log-method { color: #4a90d9; }
+.method-POST   .log-method { color: #00cc66; }
+.method-PUT    .log-method { color: #ff9933; }
+.method-PATCH  .log-method { color: #ff9933; }
+.method-DELETE .log-method { color: #ff4444; }
+
+.method-GET    .log-status { color: #4a90d9; }
+.method-POST   .log-status { color: #00cc66; }
+.method-PUT    .log-status { color: #ff9933; }
+.method-PATCH  .log-status { color: #ff9933; }
+.method-DELETE .log-status { color: #ff4444; }
+
+/* ── Leaderboard strip ─────────────────────────────────────── */
+#leaderboard-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background: #16162a;
+  border-top: 2px solid #2a2a4a;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 20px;
+  overflow: hidden;
+}
+
+.lb-label {
+  font-size: 0.9rem;
+  color: #6a6a9a;
+  letter-spacing: 0.15em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#leaderboard-entries {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.lb-empty {
+  color: #4a4a6a;
+  font-size: 1.1rem;
+}
+
+.lb-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 1.3rem;
+}
+
+.lb-rank {
+  color: #6a6a9a;
+  font-size: 1rem;
+}
+
+.lb-rank-1 { color: #ffd700; }
+.lb-rank-2 { color: #c0c0c0; }
+.lb-rank-3 { color: #cd7f32; }
+
+.lb-name {
+  color: #00ff88;
+  font-weight: bold;
+}
+
+.lb-score {
+  color: #ffdd57;
+}
+
+.lb-sep {
+  color: #3a3a5a;
+  margin: 0 4px;
+}
+
+/* ── Idle overlay ──────────────────────────────────────────── */
+#idle-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0d0d1a;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  gap: 24px;
+}
+
+#idle-overlay.visible {
+  display: flex;
+}
+
+.idle-title {
+  font-size: 6rem;
+  font-weight: bold;
+  color: #00ff88;
+  text-shadow: 0 0 40px rgba(0, 255, 136, 0.3);
+  animation: glow 3s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% { text-shadow: 0 0 40px rgba(0, 255, 136, 0.3); }
+  50%      { text-shadow: 0 0 80px rgba(0, 255, 136, 0.6), 0 0 120px rgba(0, 255, 136, 0.2); }
+}
+
+.idle-subtitle {
+  font-size: 1.6rem;
+  color: #8888bb;
+}
+
+.idle-verbs {
+  display: flex;
+  gap: 24px;
+  font-size: 2.2rem;
+  font-weight: bold;
+  margin: 20px 0;
+}
+
+.verb-get    { color: #4a90d9; }
+.verb-post   { color: #00cc66; }
+.verb-put    { color: #ff9933; }
+.verb-delete { color: #ff4444; }
+
+.idle-cta {
+  font-size: 1.4rem;
+  color: #6a6a9a;
+  animation: pulse-cta 2s ease-in-out infinite;
+  margin-top: 12px;
+}
+
+@keyframes pulse-cta {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+
+/* Idle leaderboard (full-size, centered) */
+#idle-leaderboard {
+  margin-top: 32px;
+  text-align: center;
+}
+
+#idle-leaderboard h3 {
+  font-size: 1.2rem;
+  color: #6a6a9a;
+  letter-spacing: 0.15em;
+  margin-bottom: 16px;
+}
+
+.idle-lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.idle-lb-row {
+  display: flex;
+  gap: 16px;
+  font-size: 1.6rem;
+  align-items: center;
+}
+
+.idle-lb-row .lb-rank {
+  min-width: 40px;
+  text-align: right;
+}
+
+.idle-lb-row .lb-name {
+  min-width: 80px;
+}
+
+.idle-lb-row .lb-score {
+  min-width: 60px;
+  text-align: right;
+}
+
+/* ── Dimmed state (calendar when idle) ─────────────────────── */
+#main-area.dimmed {
+  opacity: 0.15;
+  pointer-events: none;
 }

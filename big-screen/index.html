@@ -7,9 +7,54 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>APIgame</h1>
-    <div id="status">Connecting...</div>
-    <pre id="output">Waiting for game data...</pre>
+    <!-- Connection status indicator -->
+    <div id="conn-status" class="disconnected">DISCONNECTED</div>
+
+    <!-- Player info bar (visible during active game) -->
+    <header id="player-bar" class="hidden">
+        <span id="player-name">---</span>
+        <span id="player-score">0</span>
+        <span id="player-timer">0:60</span>
+    </header>
+
+    <!-- Main content area: calendar + live log -->
+    <main id="main-area">
+        <section id="calendar-panel">
+            <h2>CALENDAR</h2>
+            <div id="calendar-date"></div>
+            <div id="calendar-events">
+                <div class="empty-state">No events</div>
+            </div>
+        </section>
+
+        <section id="log-panel">
+            <h2>LIVE LOG</h2>
+            <div id="log-entries"></div>
+        </section>
+    </main>
+
+    <!-- Leaderboard strip -->
+    <footer id="leaderboard-bar">
+        <span class="lb-label">LEADERBOARD</span>
+        <div id="leaderboard-entries">
+            <span class="lb-empty">No scores yet</span>
+        </div>
+    </footer>
+
+    <!-- Idle overlay (shown when no player active) -->
+    <div id="idle-overlay" class="visible">
+        <div class="idle-title">APIgame</div>
+        <div class="idle-subtitle">Learn HTTP verbs with a real API</div>
+        <div class="idle-verbs">
+            <span class="verb-get">GET</span>
+            <span class="verb-post">POST</span>
+            <span class="verb-put">PUT</span>
+            <span class="verb-delete">DELETE</span>
+        </div>
+        <div class="idle-cta">Press button on controller to play</div>
+        <div id="idle-leaderboard"></div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
