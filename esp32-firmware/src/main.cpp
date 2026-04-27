@@ -1,111 +1,127 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include "display.h"
 #include "input.h"
+#include "mqtt_client.h"
+#include "game_ui.h"
+#include "secrets.h"
 
-// Display area for live input status (bottom portion of screen)
-static const int STATUS_Y = 150;
+// ── Frame rate ───────────────────────────────────────────────────────
+static const unsigned long FRAME_MS = 33;   // ~30 fps
+static unsigned long last_frame = 0;
 
-static const char* dir_name(JoyDirection d) {
-    switch (d) {
-        case JOY_LEFT:  return "LEFT ";
-        case JOY_RIGHT: return "RIGHT";
-        case JOY_UP:    return "UP   ";
-        case JOY_DOWN:  return "DOWN ";
-        default:        return "NONE ";
+// ── MQTT message handler ─────────────────────────────────────────────
+
+static void on_mqtt(const char* topic, const char* payload) {
+    Serial.printf("MQTT [%s] %s\n", topic, payload);
+
+    JsonDocument doc;
+    if (deserializeJson(doc, payload)) {
+        Serial.println("  JSON parse error");
+        return;
+    }
+
+    String t(topic);
+
+    if (t.endsWith("/task")) {
+        const char* text = doc["text"] | "";
+        game_ui_set_task(text);
+        // timer comes from agent via result messages, not task
+    }
+    else if (t.endsWith("/result")) {
+        const char* verb    = doc["verb"] | "";
+        int         status  = doc["status"] | 0;
+        bool        correct = doc["correct"] | false;
+        int         delta   = doc["points_delta"] | 0;
+        int         total   = doc["score_total"] | 0;
+
+        game_ui_set_result(verb, status, correct, delta);
+        game_ui_set_score(total);
     }
 }
 
-static JoyDirection last_dir = JOY_NONE;
-static bool need_redraw = true;
+// ── Publish player action ────────────────────────────────────────────
 
-void draw_status(JoyDirection dir, int raw_x, int raw_y) {
-    TFT_eSPI& tft = display_get_tft();
+static void publish_action(const char* verb) {
+    char topic[64];
+    snprintf(topic, sizeof(topic), "apigame/device/%s/action", DEVICE_ID);
 
-    // Clear the status area
-    tft.fillRect(0, STATUS_Y, 320, 90, TFT_BLACK);
+    JsonDocument doc;
+    doc["verb"]     = verb;
+    doc["round_id"] = "r0";          // placeholder until state machine (Step 14)
+    doc["ts"]       = millis() / 1000;
 
-    // Joystick direction — large text
-    tft.setTextDatum(TL_DATUM);
-    display_text(10, STATUS_Y, "JOY:", TFT_CYAN, 2);
+    char buf[128];
+    serializeJson(doc, buf, sizeof(buf));
+    mqtt_publish(topic, buf);
 
-    uint16_t dir_color = (dir == JOY_NONE) ? TFT_DARKGREY : TFT_GREEN;
-    display_text(80, STATUS_Y, dir_name(dir), dir_color, 2);
-
-    // Raw analog values
-    char buf[32];
-    snprintf(buf, sizeof(buf), "X:%4d  Y:%4d", raw_x, raw_y);
-    display_text(10, STATUS_Y + 25, buf, TFT_DARKGREY, 1);
-
-    // Button states — show labels, will highlight when pressed
-    display_text(10, STATUS_Y + 45, "BTN:", TFT_CYAN, 2);
-    display_text(80, STATUS_Y + 45, "---", TFT_DARKGREY, 2);
-
-    display_text(10, STATUS_Y + 70, "JOY_BTN:", TFT_CYAN, 2);
-    display_text(120, STATUS_Y + 70, "---", TFT_DARKGREY, 2);
+    Serial.printf("Action → %s\n", buf);
 }
 
-void flash_button(const char* label, int y, int x_offset) {
-    display_text(x_offset, y, "PRESSED!", TFT_YELLOW, 2);
-}
+// ── Setup ────────────────────────────────────────────────────────────
 
 void setup() {
     Serial.begin(115200);
     delay(100);
-    Serial.println();
-    Serial.println("=== APIgame Hardware Test ===");
+    Serial.println("\n=== APIgame ===");
 
     display_init();
     input_init();
-    display_boot_screen();
 
-    // Hold boot screen for 1.5s so it's visible
-    delay(1500);
+    // splash while connecting
+    TFT_eSPI& tft = display_get_tft();
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextSize(4);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString("APIgame", 160, 50);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.drawString("Connecting WiFi...", 160, 110);
 
-    // Draw initial status
-    draw_status(JOY_NONE, JOY_CENTER, JOY_CENTER);
+    // connect (blocking)
+    mqtt_init(DEVICE_ID);
+    mqtt_set_callback(on_mqtt);
+    mqtt_connect();
 
-    Serial.println("Ready. Move joystick or press buttons.");
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.drawString("Connected!", 160, 140);
+    delay(600);
+
+    // start game UI
+    game_ui_init();
+    game_ui_set_name("---");
+    game_ui_set_score(0);
+    game_ui_set_timer(60);
+    game_ui_set_task("Waiting...");
+
+    Serial.println("Ready — move joystick, press button");
 }
 
+// ── Loop ─────────────────────────────────────────────────────────────
+
 void loop() {
-    // Read inputs
-    JoyDirection dir = joy_direction();
-    int raw_x = joy_raw_x();
-    int raw_y = joy_raw_y();
-    bool btn = button_pressed();
-    bool joy_btn = joy_button_pressed();
+    // MQTT keep-alive / reconnect (non-blocking)
+    mqtt_loop();
 
-    // Print joystick direction to serial (only on change)
-    if (dir != last_dir) {
-        Serial.print("JOY: ");
-        Serial.println(dir_name(dir));
-        last_dir = dir;
-        need_redraw = true;
+    // frame-rate limiter
+    unsigned long now = millis();
+    if (now - last_frame < FRAME_MS) return;
+    last_frame = now;
+
+    // read raw joystick
+    int jx = joy_raw_x();
+    int jy = joy_raw_y();
+
+    // update sprite position + selection
+    game_ui_update(jx, jy);
+
+    // button → publish selected verb
+    if (button_pressed()) {
+        const char* verb = game_ui_get_selected_verb();
+        publish_action(verb);
     }
 
-    // Print button presses to serial
-    if (btn) {
-        Serial.println("BTN: pressed");
-        need_redraw = true;
-    }
-    if (joy_btn) {
-        Serial.println("JOY_BTN: pressed");
-        need_redraw = true;
-    }
-
-    // Update display (only when something changed)
-    if (need_redraw) {
-        draw_status(dir, raw_x, raw_y);
-
-        if (btn) {
-            flash_button("BTN", STATUS_Y + 45, 80);
-        }
-        if (joy_btn) {
-            flash_button("JOY_BTN", STATUS_Y + 70, 120);
-        }
-
-        need_redraw = false;
-    }
-
-    delay(50);  // 20Hz polling
+    // render
+    game_ui_draw();
 }
