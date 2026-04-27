@@ -4,7 +4,16 @@
 #include "input.h"
 #include "mqtt_client.h"
 #include "game_ui.h"
+#include "name_entry.h"
 #include "secrets.h"
+
+// ── Firmware states ─────────────────────────────────────────────────
+enum AppState {
+    STATE_NAME_ENTRY,
+    STATE_GAME
+};
+
+static AppState app_state = STATE_NAME_ENTRY;
 
 // ── Frame rate ───────────────────────────────────────────────────────
 static const unsigned long FRAME_MS = 33;   // ~30 fps
@@ -26,7 +35,6 @@ static void on_mqtt(const char* topic, const char* payload) {
     if (t.endsWith("/task")) {
         const char* text = doc["text"] | "";
         game_ui_set_task(text);
-        // timer comes from agent via result messages, not task
     }
     else if (t.endsWith("/result")) {
         const char* verb    = doc["verb"] | "";
@@ -56,6 +64,23 @@ static void publish_action(const char* verb) {
     mqtt_publish(topic, buf);
 
     Serial.printf("Action → %s\n", buf);
+}
+
+// ── Publish session message ──────────────────────────────────────────
+
+static void publish_session_name(const char* name) {
+    char topic[64];
+    snprintf(topic, sizeof(topic), "apigame/device/%s/session", DEVICE_ID);
+
+    JsonDocument doc;
+    doc["type"] = "name";
+    doc["name"] = name;
+
+    char buf[128];
+    serializeJson(doc, buf, sizeof(buf));
+    mqtt_publish(topic, buf);
+
+    Serial.printf("Published session: %s\n", buf);
 }
 
 // ── Setup ────────────────────────────────────────────────────────────
@@ -88,14 +113,11 @@ void setup() {
     tft.drawString("Connected!", 160, 140);
     delay(600);
 
-    // start game UI
-    game_ui_init();
-    game_ui_set_name("---");
-    game_ui_set_score(0);
-    game_ui_set_timer(60);
-    game_ui_set_task("Waiting...");
+    // start in name entry state
+    app_state = STATE_NAME_ENTRY;
+    name_entry_init();
 
-    Serial.println("Ready — move joystick, press button");
+    Serial.println("Ready — enter your name");
 }
 
 // ── Loop ─────────────────────────────────────────────────────────────
@@ -109,19 +131,48 @@ void loop() {
     if (now - last_frame < FRAME_MS) return;
     last_frame = now;
 
-    // read raw joystick
-    int jx = joy_raw_x();
-    int jy = joy_raw_y();
+    switch (app_state) {
 
-    // update sprite position + selection
-    game_ui_update(jx, jy);
+    case STATE_NAME_ENTRY: {
+        JoyDirection dir = joy_direction();
+        bool btn = button_pressed();
 
-    // button → publish selected verb
-    if (button_pressed()) {
-        const char* verb = game_ui_get_selected_verb();
-        publish_action(verb);
+        bool done = name_entry_update(dir, btn);
+        name_entry_draw();
+
+        if (done) {
+            String name = name_entry_get_name();
+            Serial.printf("Name entered: %s\n", name.c_str());
+
+            publish_session_name(name.c_str());
+
+            // transition to game
+            app_state = STATE_GAME;
+            game_ui_init();
+            game_ui_set_name(name.c_str());
+            game_ui_set_score(0);
+            game_ui_set_timer(60);
+            game_ui_set_task("Waiting...");
+
+            Serial.println("State → GAME");
+        }
+        break;
     }
 
-    // render
-    game_ui_draw();
+    case STATE_GAME: {
+        int jx = joy_raw_x();
+        int jy = joy_raw_y();
+
+        game_ui_update(jx, jy);
+
+        if (button_pressed()) {
+            const char* verb = game_ui_get_selected_verb();
+            publish_action(verb);
+        }
+
+        game_ui_draw();
+        break;
+    }
+
+    }  // switch
 }
