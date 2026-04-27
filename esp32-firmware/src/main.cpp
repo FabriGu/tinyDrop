@@ -5,11 +5,13 @@
 #include "mqtt_client.h"
 #include "game_ui.h"
 #include "name_entry.h"
+#include "tutorial.h"
 #include "secrets.h"
 
 // ── Firmware states ─────────────────────────────────────────────────
 enum AppState {
     STATE_NAME_ENTRY,
+    STATE_TUTORIAL,
     STATE_GAME
 };
 
@@ -146,16 +148,60 @@ void loop() {
 
             publish_session_name(name.c_str());
 
-            // transition to game
-            app_state = STATE_GAME;
+            // init game UI and tutorial
             game_ui_init();
             game_ui_set_name(name.c_str());
             game_ui_set_score(0);
-            game_ui_set_timer(60);
-            game_ui_set_task("Waiting...");
+            game_ui_set_timer(0);
 
-            Serial.println("State → GAME");
+            tutorial_init();
+            game_ui_set_visible_boxes(1);
+            game_ui_suppress_status(true);
+            game_ui_set_task(tutorial_get_prompt());
+
+            app_state = STATE_TUTORIAL;
+            Serial.println("State → TUTORIAL");
         }
+        break;
+    }
+
+    case STATE_TUTORIAL: {
+        int jx = joy_raw_x();
+        int jy = joy_raw_y();
+        game_ui_update(jx, jy);
+
+        if (button_pressed()) {
+            const char* verb = game_ui_get_selected_verb();
+
+            if (tutorial_check_verb(verb)) {
+                // Correct — publish action, advance tutorial
+                publish_action(verb);
+                int completed = tutorial_current_step() + 1;
+                Serial.printf("Tutorial step %d/4 complete\n", completed);
+                tutorial_advance();
+
+                if (tutorial_current_step() >= 4) {
+                    // Tutorial done → transition to round
+                    app_state = STATE_GAME;
+                    game_ui_suppress_status(false);
+                    game_ui_set_timer(60);
+                    game_ui_set_task("Waiting...");
+                    Serial.println("State → GAME (tutorial complete)");
+                    break;   // skip draw — next frame renders clean game UI
+                }
+
+                game_ui_set_visible_boxes(tutorial_current_step() + 1);
+                game_ui_set_task(tutorial_get_prompt());
+            } else {
+                // Wrong verb — show hint, no MQTT, no penalty
+                tutorial_show_hint();
+                Serial.printf("Wrong verb: %s (expected %s)\n",
+                              verb, tutorial_get_expected_verb());
+            }
+        }
+
+        game_ui_draw();
+        tutorial_draw();
         break;
     }
 

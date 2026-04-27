@@ -103,15 +103,33 @@ static bool   full_redraw;
 static unsigned long score_chg_ms;
 static int    score_chg_sign;         // +1 or -1 for flash colour
 
+static int    visible_count;          // how many verb boxes to show (1-4)
+static bool   boxes_dirty;
+static bool   status_suppressed;
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 static int nearest_box() {
     bool left = (spr_x < PLAY_CX);
     bool top  = (spr_y < PLAY_CY);
-    if (left && top)   return 0;   // GET
-    if (!left && top)  return 1;   // POST
-    if (left && !top)  return 2;   // PUT
-    return 3;                      // DELETE
+    int c;
+    if (left && top)        c = 0;   // GET
+    else if (!left && top)  c = 1;   // POST
+    else if (left && !top)  c = 2;   // PUT
+    else                    c = 3;   // DELETE
+
+    if (c < visible_count) return c;
+
+    // Snap to nearest visible box
+    float best_d = 1e9f;
+    int best = 0;
+    for (int i = 0; i < visible_count; i++) {
+        float dx = spr_x - bx_cx[i];
+        float dy = spr_y - bx_cy[i];
+        float d = dx * dx + dy * dy;
+        if (d < best_d) { best_d = d; best = i; }
+    }
+    return best;
 }
 
 static bool spr_overlaps_box(float sx, float sy, int i) {
@@ -281,6 +299,10 @@ void game_ui_init() {
     g_has_res = false;
     score_chg_sign = 0;  score_chg_ms = 0;
 
+    visible_count = 4;
+    boxes_dirty = false;
+    status_suppressed = false;
+
     d_task = d_stat = d_res = true;
     full_redraw = true;
 }
@@ -355,6 +377,17 @@ void game_ui_set_name(const char* n) {
     d_stat = true;
 }
 
+void game_ui_set_visible_boxes(int n) {
+    int clamped = (n < 1) ? 1 : (n > 4) ? 4 : n;
+    if (clamped == visible_count) return;
+    visible_count = clamped;
+    boxes_dirty = true;
+}
+
+void game_ui_suppress_status(bool s) {
+    status_suppressed = s;
+}
+
 int game_ui_get_selected_index() { return sel; }
 
 const char* game_ui_get_selected_verb() {
@@ -370,12 +403,19 @@ void game_ui_draw() {
     if (full_redraw) {
         t.fillScreen(TFT_BLACK);
         draw_dividers(t);
-        for (int i = 0; i < 4; i++) draw_box(t, i, i == sel);
+        for (int i = 0; i < visible_count; i++) draw_box(t, i, i == sel);
         draw_spr(t, spr_x, spr_y);
         drw_x = spr_x;  drw_y = spr_y;  drw_walk = walk_fr;
         full_redraw = false;
         sel_dirty = false;
+        boxes_dirty = false;
         d_stat = d_task = d_res = true;
+    }
+
+    // ── 1b. Newly visible boxes ──
+    if (boxes_dirty) {
+        for (int i = 0; i < visible_count; i++) draw_box(t, i, i == sel);
+        boxes_dirty = false;
     }
 
     // ── 2. Score flash timeout (check before status draw) ──
@@ -384,8 +424,8 @@ void game_ui_draw() {
         d_stat = true;
     }
 
-    // ── 3. Status bar ──
-    if (d_stat) { draw_status(t); d_stat = false; }
+    // ── 3. Status bar (skipped when tutorial banner is active) ──
+    if (d_stat) { if (!status_suppressed) draw_status(t); d_stat = false; }
 
     // ── 4. Task text ──
     if (d_task) { draw_task_area(t); d_task = false; }
@@ -399,15 +439,15 @@ void game_ui_draw() {
         // erase old position
         erase_spr(t, drw_x, drw_y);
         // if selection also changed this frame, redraw departed box unselected
-        if (sel_dirty && old_sel >= 0)
+        if (sel_dirty && old_sel >= 0 && old_sel < visible_count)
             draw_box(t, old_sel, false);
         // repair any box the erase may have damaged
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < visible_count; i++) {
             if (spr_overlaps_box(drw_x, drw_y, i))
                 draw_box(t, i, i == sel);
         }
         // ensure new selected box has highlight
-        if (sel_dirty && sel >= 0)
+        if (sel_dirty && sel >= 0 && sel < visible_count)
             draw_box(t, sel, true);
         // draw sprite at new position (on top of everything)
         draw_spr(t, spr_x, spr_y);
@@ -417,11 +457,11 @@ void game_ui_draw() {
 
     // ── 6. Box selection change (when sprite didn't move) ──
     if (sel_dirty) {
-        if (old_sel >= 0) draw_box(t, old_sel, false);
-        if (sel >= 0)     draw_box(t, sel, true);
+        if (old_sel >= 0 && old_sel < visible_count) draw_box(t, old_sel, false);
+        if (sel >= 0 && sel < visible_count)          draw_box(t, sel, true);
         // if sprite overlaps redrawn box, put sprite back on top
-        if ((sel >= 0 && spr_overlaps_box(spr_x, spr_y, sel)) ||
-            (old_sel >= 0 && spr_overlaps_box(spr_x, spr_y, old_sel)))
+        if ((sel >= 0 && sel < visible_count && spr_overlaps_box(spr_x, spr_y, sel)) ||
+            (old_sel >= 0 && old_sel < visible_count && spr_overlaps_box(spr_x, spr_y, old_sel)))
             draw_spr(t, spr_x, spr_y);
         sel_dirty = false;
     }

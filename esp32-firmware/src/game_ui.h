@@ -11,6 +11,8 @@ void game_ui_set_result(const char* verb, int status, bool correct, int delta);
 void game_ui_set_score(int score);
 void game_ui_set_timer(int seconds);
 void game_ui_set_name(const char* name);
+void game_ui_set_visible_boxes(int count);   // 1-4 boxes shown (default 4)
+void game_ui_suppress_status(bool suppress); // hide status bar (for tutorial banner)
 int  game_ui_get_selected_index();            // 0=GET 1=POST 2=PUT 3=DEL
 const char* game_ui_get_selected_verb();      // full name for MQTT
 
